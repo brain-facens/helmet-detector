@@ -51,6 +51,7 @@ def mobilenetv2(_input_shape:tuple=(646,640,1)):
     __x = inverted_residuals(__x, 160, 2, 6, 1, 3)
     __x = inverted_residuals(__x, 320, 1, 6, 1, 1)
 
+    __x = conv_block(__x, 1280, 1, 1, True)
     __x = GlobalAveragePooling2D()(__x)
 
     return Model(inputs=__input, outputs=__x)
