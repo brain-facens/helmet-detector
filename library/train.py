@@ -8,6 +8,8 @@ IMG_SHAPE = (640, 640, 1)
 IMG_WIDTH = IMG_SHAPE[1]
 IMG_HEIGHT = IMG_SHAPE[0]
 
+DATASET_PATH = "/home/brain-matheus/BRAIN-Project/helmet_detector/dataset"
+
 
 # This function will create a new label file but
 # only with useful information from original
@@ -68,3 +70,32 @@ def _create_json_label(label_dir:str, to_dir:str):
                     new_file.write("{" + __file_format + "\n}\n")
                 new_file.write("]\n")
                 new_file.write("}")
+
+
+# This function will load the images and labels
+# from 'images' and 'labels' folder inside the
+# DATASET_PATH.
+def load_dataset(_train_split:float=0.9, _batch_size:int=8):
+
+    @tf.function
+    def load_images(_images):
+        return tf.io.decode_jpeg(tf.io.read_file(_images), channels=1)
+
+    def load_labels(_labels):
+        with open(_labels.numpy(), "r", encoding="utf-8") as file:
+            js = json.load(file)
+            print(js)
+            return _labels
+    
+    __images = tf.data.Dataset.list_files(os.path.join(DATASET_PATH, "images"), shuffle=False)
+    __labels = tf.data.Dataset.list_files(os.path.join(DATASET_PATH, "labels"), shuffle=False)
+
+    # Preparing data.
+    __images = __images.map(load_images)
+    __labels = __labels.map(lambda label: tf.py_function(load_labels, [label], [tf.uint8, tf.float16]))
+
+    __dataset = tf.data.Dataset.zip((__images, __labels)).batch(_batch_size).shuffle(1000)
+
+    return __dataset
+
+DATA = load_dataset()
