@@ -1,5 +1,5 @@
-from tensorflow.keras.layers import Conv2D, DepthwiseConv2D, BatchNormalization, Add, GlobalAveragePooling2D, Input
-from tensorflow.keras.models import Model
+from keras.layers import Conv2D, DepthwiseConv2D, BatchNormalization, Add, GlobalAveragePooling2D, Input
+from keras.models import Model
 
 import tensorflow as tf
 
@@ -55,5 +55,3 @@ def mobilenetv2(_input_shape:tuple=(646,640,1)):
     __x = GlobalAveragePooling2D()(__x)
 
     return Model(inputs=__input, outputs=__x)
-
-MobileNetV2 = mobilenetv2()
