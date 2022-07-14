@@ -1,7 +1,26 @@
+#==============================================================================
+# RESTARING SESSION.
 import tensorflow as tf
+import keras
+
+keras.backend.clear_session()
+gpus = tf.config.experimental.list_physical_devices(device_type="GPU")
+if gpus:
+    try:
+        tf.config.experimental.set_virtual_device_configuration(
+            device=gpus[0],
+            logical_devices=[tf.config.experimental.VirtualDeviceConfiguration(memory_limit=1024)] # Limiting GPU memory to 1024MB
+        )
+    except RuntimeError as e:
+        logging.warning(e)
+        exit(1)
+#==============================================================================
+from ssd_mobilenetv2 import mobilenetv2, ssd
+import logging
 import keras
 import json
 import os
+
 
 # PARAMETERS.
 IMG_SHAPE = (640, 640, 1)
@@ -10,7 +29,7 @@ IMG_HEIGHT = IMG_SHAPE[0]
 
 DATASET_PATH = "/home/brain-matheus/BRAIN-Project/helmet_detector/dataset"
 
-BATCH = 3
+BATCH = 16
 EPOCH = 10
 
 CLASS = {
@@ -19,8 +38,12 @@ CLASS = {
     2:"com-capacete"
 }
 
-OPTIMIZER = tf.keras.optimizer.SGD()
-#=====================================================================================================
+OPTIMIZER = tf.keras.optimizers.SGD(
+    learning_rate=1e-3
+)
+
+
+#==============================================================================
 # This function will create a new label file but
 # only with useful information from original
 # label file.
@@ -127,10 +150,10 @@ def load_dataset(_train_split:float=0.9, _batch_size:int=8):
     _train_split = int(len(__dataset) * _train_split)
 
     __train = __dataset.take(_train_split)
-    __val = __dataset.skip(_train_split).take(len(__dataset) - _train_split)
+    __val = __dataset.skip(_train_split).take(-1)
 
     return __train, __val
-#=====================================================================================================
+#==============================================================================
 @tf.function
 def train_step():
     pass
@@ -146,13 +169,18 @@ def bbox_loss():
 @tf.function
 def cls_loss():
     pass
-#=====================================================================================================
+#==============================================================================
 
-# Restarting session.
-keras.backend.clear_session()
+# -- Dataset --
+try:
+    logging.info("Loading Dataset..")
+    TRAIN, VAL = load_dataset(_batch_size=BATCH)
+except:
+    logging.warning("Could not load the Dataset: ".format(DATASET_PATH))
+    exit(1)
 
-# Loading dataset.
-TRAIN, VAL = load_dataset(_batch_size=BATCH)
-
-# Loading model.
-MODEL = ...
+# -- Model --
+SSD_MOBILENETV2 = keras.Sequential([
+    mobilenetv2.mobilenetv2_architecture(_input_shape=IMG_SHAPE)
+])
+SSD_MOBILENETV2.summary()
