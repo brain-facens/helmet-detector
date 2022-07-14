@@ -1,4 +1,4 @@
-from keras.layers import Conv2D, DepthwiseConv2D, BatchNormalization, Add, GlobalAveragePooling2D, Input
+from keras.layers import Conv2D, DepthwiseConv2D, BatchNormalization, Add, Input
 from keras.models import Model
 
 import tensorflow as tf
@@ -37,7 +37,7 @@ def inverted_residuals(_input, _filter:int, _strides:int, _expasion_factor:int, 
         __x = bottleneck(__x, _filter, 1, _expasion_factor, _alpha, True)
     return __x
 
-def mobilenetv2(_input_shape:tuple=(646,640,1)):
+def mobilenetv2_architecture(_input_shape:tuple=(646,640,1)):
 
     __input = Input(shape=_input_shape)
 
@@ -52,6 +52,5 @@ def mobilenetv2(_input_shape:tuple=(646,640,1)):
     __x = inverted_residuals(__x, 320, 1, 6, 1, 1)
 
     __x = conv_block(__x, 1280, 1, 1, True)
-    __x = GlobalAveragePooling2D()(__x)
 
-    return Model(inputs=__input, outputs=__x)
+    return Model(inputs=__input, outputs=__x, name="mobilenetv2")
