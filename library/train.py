@@ -1,16 +1,26 @@
 import tensorflow as tf
-import keras as K
+import keras
 import json
 import os
 
-
+# PARAMETERS.
 IMG_SHAPE = (640, 640, 1)
 IMG_WIDTH = IMG_SHAPE[1]
 IMG_HEIGHT = IMG_SHAPE[0]
 
 DATASET_PATH = "/home/brain-matheus/BRAIN-Project/helmet_detector/dataset"
 
+BATCH = 3
+EPOCH = 10
 
+CLASS = {
+    0:"motocicleta",
+    1:"sem-capacete",
+    2:"com-capacete"
+}
+
+OPTIMIZER = tf.keras.optimizer.SGD()
+#=====================================================================================================
 # This function will create a new label file but
 # only with useful information from original
 # label file.
@@ -43,7 +53,8 @@ def _create_json_label(label_dir:str, to_dir:str):
                 new_file.write("{\n")
                 new_file.write(f'"image":"{lbl}",\n')
                 new_file.write('"data":[\n')
-                for data in js["shapes"]:
+                __len = len(js["shapes"])
+                for i,data in enumerate(js["shapes"]):
                     __point = data["points"]
                     __label = data["label"]
 
@@ -67,35 +78,81 @@ def _create_json_label(label_dir:str, to_dir:str):
                     ]
                     """.format(__label, __x1, __y1, __x2, __y2)
 
-                    new_file.write("{" + __file_format + "\n}\n")
+                    if i < __len - 1:
+                        new_file.write("{" + __file_format + "\n},\n")
+                    else:
+                        new_file.write("{" + __file_format + "\n}\n")
                 new_file.write("]\n")
                 new_file.write("}")
 
+def _preprocessing_images():
+    __ppi = keras.Sequential(name="preprocessing_model")
+    __ppi.add(keras.layers.Resizing(640,640))
+    __ppi.add(keras.layers.Rescaling(1./255))
+    __ppi.add(tf.keras.layers.RandomBrightness(factor=0.3))
+    return __ppi
 
 # This function will load the images and labels
 # from 'images' and 'labels' folder inside the
 # DATASET_PATH.
 def load_dataset(_train_split:float=0.9, _batch_size:int=8):
 
+    __preprocessing_img = _preprocessing_images()
+
     @tf.function
     def load_images(_images):
-        return tf.io.decode_jpeg(tf.io.read_file(_images), channels=1)
+        return __preprocessing_img(tf.cast(tf.io.decode_jpeg(tf.io.read_file(_images), channels=1), dtype=tf.float32))
 
     def load_labels(_labels):
         with open(_labels.numpy(), "r", encoding="utf-8") as file:
             js = json.load(file)
-            print(js)
-            return _labels
-    
-    __images = tf.data.Dataset.list_files(os.path.join(DATASET_PATH, "images"), shuffle=False)
-    __labels = tf.data.Dataset.list_files(os.path.join(DATASET_PATH, "labels"), shuffle=False)
+            __all_labels = []
+            __all_points = []
+            for data in js["data"]:
+                __label = data["label"]
+                __point = data["point"]
+                __all_labels.append(__label)
+                __all_points.append(__point)
+            return __all_labels, __all_points
+
+    __images = tf.data.Dataset.list_files(os.path.join(DATASET_PATH, "images", "*.jpg"), shuffle=False)
+    __labels = tf.data.Dataset.list_files(os.path.join(DATASET_PATH, "labels", "*.json"), shuffle=False)
 
     # Preparing data.
     __images = __images.map(load_images)
-    __labels = __labels.map(lambda label: tf.py_function(load_labels, [label], [tf.uint8, tf.float16]))
+    __labels = __labels.map(lambda label: tf.py_function(load_labels, [label], [tf.int32, tf.float32]))
 
-    __dataset = tf.data.Dataset.zip((__images, __labels)).batch(_batch_size).shuffle(1000)
+    __dataset = tf.data.Dataset.zip((__images, __labels)).padded_batch(_batch_size, padded_shapes=(([None, None, 1]),([None],[None,4])), padding_values=((0.0), (-1, -1.0))).shuffle(1000).prefetch(_batch_size // 3)
 
-    return __dataset
+    _train_split = int(len(__dataset) * _train_split)
 
-DATA = load_dataset()
+    __train = __dataset.take(_train_split)
+    __val = __dataset.skip(_train_split).take(len(__dataset) - _train_split)
+
+    return __train, __val
+#=====================================================================================================
+@tf.function
+def train_step():
+    pass
+
+@tf.function
+def val_step():
+    pass
+
+@tf.function
+def bbox_loss():
+    pass
+
+@tf.function
+def cls_loss():
+    pass
+#=====================================================================================================
+
+# Restarting session.
+keras.backend.clear_session()
+
+# Loading dataset.
+TRAIN, VAL = load_dataset(_batch_size=BATCH)
+
+# Loading model.
+MODEL = ...
