@@ -21,7 +21,7 @@ import keras
 import json
 import os
 
-
+#------------------------------------------------------------------------------
 # PARAMETERS.
 IMG_SHAPE = (640, 640, 1)
 IMG_WIDTH = IMG_SHAPE[1]
@@ -32,6 +32,8 @@ DATASET_PATH = "/home/brain-matheus/BRAIN-Project/helmet_detector/dataset"
 BATCH = 16
 EPOCH = 10
 
+TRAIN_SPLIT = 0.8
+
 CLASS = {
     1:"motocicleta",
     2:"sem-capacete",
@@ -41,7 +43,7 @@ CLASS = {
 OPTIMIZER = tf.keras.optimizers.SGD(
     learning_rate=1e-3
 )
-
+#------------------------------------------------------------------------------
 
 #==============================================================================
 # This function will create a new label file but
@@ -53,7 +55,7 @@ def _create_json_label(label_dir:str, to_dir:str):
         "image":"image_name.jpg",
         "data":[
             {
-                "label":0,
+                "label":1,
                 "point":[
                     0.1,
                     0.2,
@@ -108,44 +110,52 @@ def _create_json_label(label_dir:str, to_dir:str):
                 new_file.write("]\n")
                 new_file.write("}")
 
-def _preprocessing_images():
-    __ppi = keras.Sequential(name="preprocessing_model")
-    __ppi.add(keras.layers.Resizing(640,640))
-    __ppi.add(keras.layers.Rescaling(1./255))
-    __ppi.add(tf.keras.layers.RandomBrightness(factor=0.3))
-    return __ppi
-
 # This function will load the images and labels
 # from 'images' and 'labels' folder inside the
 # DATASET_PATH.
-def load_dataset(_train_split:float=0.9, _batch_size:int=8):
+def load_dataset(_dataset:str, _train_split:float=0.9, _batch_size:int=8):
 
-    __preprocessing_img = _preprocessing_images()
+    assert type(_dataset)==str and type(_train_split)==float and type(_batch_size)==int
+    assert os.path.isdir(_dataset)
+    assert "images" in os.listdir(_dataset) and "labels" in os.listdir(_dataset)
+    assert _train_split<=0.9 and _train_split>=0.5
+    assert _batch_size>=3
+  
+    def load_json_files(_dir:str):
+        __json_dir = os.listdir(os.path.join(_dir))
+        __labels = []
+        __bbox = []
+        for json_file in __json_dir:
+            try:
+                with open(os.path.join(_dir, json_file), "r") as f:
+                    js = json.load(f)
+                    __labels.append([])
+                    __bbox.append([])
+                    for data in js["data"]:
+                        __labels[-1].append(data["label"])
+                        __bbox[-1].append(data["point"])
+            except:
+                pass
+        return __labels, __bbox
 
-    @tf.function
-    def load_images(_images):
-        return __preprocessing_img(tf.cast(tf.io.decode_jpeg(tf.io.read_file(_images), channels=1), dtype=tf.float32))
+    __images = keras.utils.image_dataset_from_directory(
+        directory=os.path.join(_dataset, "images"),
+        labels=None,
+        color_mode="grayscale",
+        batch_size=None,
+        shuffle=False,
+        image_size=(IMG_WIDTH, IMG_HEIGHT)
+    )
 
-    def load_labels(_labels):
-        with open(_labels.numpy(), "r", encoding="utf-8") as file:
-            js = json.load(file)
-            __all_labels = []
-            __all_points = []
-            for data in js["data"]:
-                __label = data["label"]
-                __point = data["point"]
-                __all_labels.append(__label)
-                __all_points.append(__point)
-            return __all_labels, __all_points
+    __label, __bbox = load_json_files(os.path.join(_dataset, "labels"))
 
-    __images = tf.data.Dataset.list_files(os.path.join(DATASET_PATH, "images", "*.jpg"), shuffle=False)
-    __labels = tf.data.Dataset.list_files(os.path.join(DATASET_PATH, "labels", "*.json"), shuffle=False)
+    __label = tf.ragged.constant(__label).to_tensor()
+    __bbox = tf.ragged.constant(__bbox).to_tensor()
 
-    # Preparing data.
-    __images = __images.map(load_images)
-    __labels = __labels.map(lambda label: tf.py_function(load_labels, [label], [tf.int32, tf.float32]))
+    __labels = tf.data.Dataset.from_tensor_slices(__label)
+    __bbox = tf.data.Dataset.from_tensor_slices(__bbox)
 
-    __dataset = tf.data.Dataset.zip((__images, __labels)).padded_batch(_batch_size, padded_shapes=(([None, None, 1]),[[None],[None,4]]), padding_values=((0.0), (-1, -1.0))).shuffle(1000).prefetch(_batch_size // 3)
+    __dataset = tf.data.Dataset.zip((__images, __labels, __bbox)).batch(_batch_size).shuffle(1000).prefetch(_batch_size // 3).cache()
 
     _train_split = int(len(__dataset) * _train_split)
 
@@ -171,16 +181,17 @@ def cls_loss():
     pass
 #==============================================================================
 
-# -- Dataset --
-try:
-    logging.info("Loading Dataset..")
-    TRAIN, VAL = load_dataset(_batch_size=BATCH)
-except:
-    logging.warning("Could not load the Dataset: ".format(DATASET_PATH))
-    exit(1)
+if __name__=="__main__":
+    # -- Dataset --
+    try:
+        logging.info("Loading Dataset..")
+        TRAIN, VAL = load_dataset(DATASET_PATH, _train_split=TRAIN_SPLIT, _batch_size=BATCH)
+    except:
+        logging.warning("Could not load the Dataset: ".format(DATASET_PATH))
+        exit(1)
 
-# -- Model --
-SSD_MOBILENETV2 = keras.Sequential([
-    mobilenetv2.mobilenetv2_architecture(_input_shape=IMG_SHAPE)
-])
-SSD_MOBILENETV2.summary()
+    # -- Model --
+    SSD_MOBILENETV2 = keras.Sequential([
+        mobilenetv2.mobilenetv2_architecture(_input_shape=IMG_SHAPE)
+    ])
+    SSD_MOBILENETV2.summary()
