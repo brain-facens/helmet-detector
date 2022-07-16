@@ -33,9 +33,9 @@ BATCH = 16
 EPOCH = 10
 
 CLASS = {
-    0:"motocicleta",
-    1:"sem-capacete",
-    2:"com-capacete"
+    1:"motocicleta",
+    2:"sem-capacete",
+    3:"com-capacete"
 }
 
 OPTIMIZER = tf.keras.optimizers.SGD(
@@ -87,7 +87,7 @@ def _create_json_label(label_dir:str, to_dir:str):
                     __y2 = __point[1][1] / IMG_HEIGHT
 
                     if __label not in __class.keys():
-                        __class[__label] = len(__class.keys())
+                        __class[__label] = len(__class.keys()) + 1
                     
                     __label = __class[__label]
 
@@ -145,7 +145,7 @@ def load_dataset(_train_split:float=0.9, _batch_size:int=8):
     __images = __images.map(load_images)
     __labels = __labels.map(lambda label: tf.py_function(load_labels, [label], [tf.int32, tf.float32]))
 
-    __dataset = tf.data.Dataset.zip((__images, __labels)).padded_batch(_batch_size, padded_shapes=(([None, None, 1]),([None],[None,4])), padding_values=((0.0), (-1, -1.0))).shuffle(1000).prefetch(_batch_size // 3)
+    __dataset = tf.data.Dataset.zip((__images, __labels)).padded_batch(_batch_size, padded_shapes=(([None, None, 1]),[[None],[None,4]]), padding_values=((0.0), (-1, -1.0))).shuffle(1000).prefetch(_batch_size // 3)
 
     _train_split = int(len(__dataset) * _train_split)
 
